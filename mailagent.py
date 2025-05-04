@@ -184,7 +184,7 @@ if not 'mcp_servers' in st.session_state:
         st.session_state.mcp_servers[x['server_name']] = x['server_id']
 
 if "system_prompt" not in st.session_state:
-    st.session_state.system_prompt = "you are an email customer service assistant for customer inquery"
+    st.session_state.system_prompt = "You are an email customer service assistant for customer inquiries."
 
 if "messages" not in st.session_state:
     st.session_state.messages = []

@@ -180,5 +180,37 @@
       "env": {},
       "description": "quote-server"
     }
+  },
+  "131c00d5": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    },
+    "quote-server": {
+      "url": "",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_server",
+        "run",
+        "server.py"
+      ],
+      "env": {},
+      "description": "quote-server"
+    }
   }
 }

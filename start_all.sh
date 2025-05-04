@@ -23,23 +23,9 @@ if [ "$1" == "gradio" ]; then
     echo "Starting Gradio Chatbot UI..."
     ./start_chatbotui.sh
 elif [ "$1" == "streamlit" ]; then
-    echo "Starting Streamlit Chatbot UI..."
-    nohup streamlit run chatbot.py \
-        --server.port ${CHATBOT_SERVICE_PORT} > ${LOG_FILE2} 2>&1 &
-
-elif [ "$1" == "streamlit-mailagent" ]; then
     echo "Starting Streamlit mailagent UI..."
     nohup streamlit run mailagent.py \
         --server.port ${CHATBOT_SERVICE_PORT} > ${LOG_FILE2} 2>&1 &
-else
-    echo "Starting both UIs..."
-    # Start Streamlit UI
-    nohup streamlit run chatbot.py \
-        --server.port ${CHATBOT_SERVICE_PORT} > ${LOG_FILE2} 2>&1 &
-    
-    # Start Gradio UI (on a different port)
-    export CHATBOT_SERVICE_PORT=8503
-    ./start_chatbotui.sh
 fi
 
 echo "Services started. Check logs in ${LOG_DIR}"
