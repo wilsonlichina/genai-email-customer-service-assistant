@@ -1,0 +1,173 @@
+{
+  "user123": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "6b8c73b2": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "e4a87916": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "quote": {
+      "url": "",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_server",
+        "run",
+        "server.py"
+      ],
+      "env": {},
+      "description": "quote-server"
+    }
+  },
+  "7603cc7e": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "7870a616": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "123456": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "47fb0698": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "23fb91b8": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "3cd59edc": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "b70aad83": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "67b6ce4d": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "af08cce1": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "c6195b96": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  },
+  "4b4883a9": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "quote-server": {
+      "url": "",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_server",
+        "run",
+        "server.py"
+      ],
+      "env": {},
+      "description": "quote-server"
+    }
+  },
+  "0d2bdc5c": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "quote-server": {
+      "url": "",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_server",
+        "run",
+        "server.py"
+      ],
+      "env": {},
+      "description": "quote-server"
+    }
+  }
+}
