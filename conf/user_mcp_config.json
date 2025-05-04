@@ -63,6 +63,17 @@
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
     }
   },
   "47fb0698": {
