@@ -1,4 +1,13 @@
 {
-  "accounts": [],
-  "current_account": null
+  "accounts": [
+    {
+      "id": "9497301@gmail.com",
+      "username": "9497301@gmail.com",
+      "password": "liweimsf2.0",
+      "imap_server": "imap.gmail.com",
+      "imap_port": 993,
+      "use_ssl": true
+    }
+  ],
+  "current_account": "9497301@gmail.com"
 }

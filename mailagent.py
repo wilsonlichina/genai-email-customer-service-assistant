@@ -29,7 +29,11 @@ API_KEY = os.environ.get("API_KEY")
 # Import the process_query_stream function
 from src.compatible_chat_client_stream import CompatibleChatClientStream
 
-logging.basicConfig(level=logging.INFO)
+# Set up detailed logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Changed to DEBUG for more detailed logs
+)
+
 mcp_base_url = os.environ.get('MCP_BASE_URL')
 mcp_command_list = ["uvx", "npx", "node", "python", "docker", "uv"]
 COOKIE_NAME = "mcp_chat_user_id"
@@ -143,40 +147,76 @@ def get_current_account():
 def fetch_emails(account, max_emails=10):
     """Fetch emails from the specified account"""
     emails = []
+    mail = None
     
     try:
+        # Log account details (without password)
+        logging.info(f"Attempting to fetch emails for: {account['username']}")
+        logging.debug(f"IMAP server: {account['imap_server']}")
+        logging.debug(f"IMAP port: {account['imap_port']}")
+        logging.debug(f"Using SSL: {account['use_ssl']}")
+        
         # Connect to the IMAP server
-        if account["use_ssl"]:
-            mail = imaplib.IMAP4_SSL(account["imap_server"], account["imap_port"])
-        else:
-            mail = imaplib.IMAP4(account["imap_server"], account["imap_port"])
+        try:
+            logging.info(f"Connecting to IMAP server: {account['imap_server']}:{account['imap_port']}")
+            if account["use_ssl"]:
+                mail = imaplib.IMAP4_SSL(account["imap_server"], account["imap_port"])
+                logging.info("Connected using SSL")
+            else:
+                mail = imaplib.IMAP4(account["imap_server"], account["imap_port"])
+                logging.info("Connected without SSL")
+        except Exception as e:
+            logging.error(f"Error connecting to IMAP server: {str(e)}")
+            return [], f"Connection error: {str(e)}"
         
         # Login to the server
-        mail.login(account["username"], account["password"])
+        try:
+            logging.info(f"Attempting to login as: {account['username']}")
+            logging.info(f"Attempting to login as: {account['password']}")
+            mail.login(account["username"], account["password"])
+            logging.info("Login successful")
+        except imaplib.IMAP4.error as e:
+            logging.error(f"IMAP login error: {str(e)}")
+            if mail:
+                try:
+                    mail.logout()
+                except:
+                    pass
+            return [], f"Authentication error: {str(e)}"
         
         # Select the inbox
+        logging.info("Selecting INBOX folder")
         status, messages = mail.select("INBOX")
         
         if status != "OK":
+            logging.error(f"Failed to select INBOX: {messages}")
             return [], f"Failed to select INBOX: {messages}"
         
+        logging.info("INBOX selected successfully")
+        
         # Get the message IDs
+        logging.info("Searching for messages")
         status, messages = mail.search(None, "ALL")
         
         if status != "OK":
+            logging.error(f"Failed to search messages: {messages}")
             return [], f"Failed to search messages: {messages}"
         
         message_ids = messages[0].split()
+        logging.info(f"Found {len(message_ids)} messages")
         
         # Get the most recent emails
         start_idx = max(0, len(message_ids) - max_emails)
         recent_ids = message_ids[start_idx:]
         recent_ids.reverse()  # Most recent first
+        logging.info(f"Processing {len(recent_ids)} recent messages")
         
         for msg_id in recent_ids:
+            logging.debug(f"Fetching message ID: {msg_id}")
             status, msg_data = mail.fetch(msg_id, "(RFC822)")
             
             if status != "OK":
+                logging.warning(f"Failed to fetch message {msg_id}: {status}")
                 continue
             
             # Parse the email
@@ -217,11 +257,13 @@ def fetch_emails(account, max_emails=10):
                             body = part.get_payload(decode=True).decode("utf-8", errors="replace")
                             break
                         except Exception as e:
+                            logging.error(f"Error decoding email part: {str(e)}")
                             body = f"Error decoding email: {str(e)}"
             else:
                 try:
                     body = msg.get_payload(decode=True).decode("utf-8", errors="replace")
                 except Exception as e:
+                    logging.error(f"Error decoding email body: {str(e)}")
                     body = f"Error decoding email: {str(e)}"
             
             # Add the email to the list
@@ -232,14 +274,23 @@ def fetch_emails(account, max_emails=10):
                 "date": date_str,
                 "body": body
             })
+            logging.debug(f"Added email: {subject}")
         
         # Close the connection
+        logging.info("Closing IMAP connection")
         mail.close()
         mail.logout()
         
+        logging.info(f"Successfully fetched {len(emails)} emails")
         return emails, "Emails fetched successfully"
     
     except Exception as e:
+        logging.exception(f"Error in fetch_emails: {str(e)}")
+        if mail:
+            try:
+                mail.logout()
+            except:
+                pass
         return [], f"Error fetching emails: {str(e)}"
 
 # 用户会话管理
@@ -608,11 +659,13 @@ def save_user_id(user_id):
 def add_email_account_ui(username, password, imap_server, imap_port, use_ssl, current_accounts):
     """UI function for adding an email account"""
     try:
+        logging.info(f"Adding email account: {username}")
         # Validate email address
         try:
             validate_email(username, check_deliverability=False)
         except EmailNotValidError:
-            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(value="IMAP Servers", choices=[]), gr.update(), f"❌ Invalid email address", current_accounts
+            logging.error(f"Invalid email address: {username}")
+            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ Invalid email address", current_accounts
         
         # Add account
         status, message = add_email_account(
@@ -624,23 +677,30 @@ def add_email_account_ui(username, password, imap_server, imap_port, use_ssl, cu
             accounts_data = load_email_accounts()
             account_names = [account["username"] for account in accounts_data["accounts"]]
             current_account = accounts_data["current_account"]
+            logging.info(f"Account added successfully: {username}")
             
             # Clear the form
             return (
-                gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value=993),
-                gr.update(value=""), gr.update(value=587), gr.update(value=True),
+                gr.update(value=""), 
+                gr.update(value=""), 
+                gr.update(value=""), 
+                gr.update(value=993),
+                gr.update(value=True),
                 gr.update(value=current_account, choices=account_names), 
                 f"✅ {message}", 
                 account_names
             )
         else:
-            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ {message}", current_accounts
+            logging.warning(f"Failed to add account: {message}")
+            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ {message}", current_accounts
     except Exception as e:
-        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ Error: {str(e)}", current_accounts
+        logging.exception(f"Error in add_email_account_ui: {str(e)}")
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ Error: {str(e)}", current_accounts
 
 def delete_email_account_ui(username, current_accounts):
     """UI function for deleting an email account"""
     try:
+        logging.info(f"Deleting email account: {username}")
         status, message = delete_email_account(username)
         
         if status:
@@ -648,41 +708,54 @@ def delete_email_account_ui(username, current_accounts):
             accounts_data = load_email_accounts()
             account_names = [account["username"] for account in accounts_data["accounts"]]
             current_account = accounts_data["current_account"]
+            logging.info(f"Account deleted successfully: {username}")
             
             return gr.update(value=current_account, choices=account_names), f"✅ {message}", account_names
         else:
+            logging.warning(f"Failed to delete account: {message}")
             return gr.update(), f"❌ {message}", current_accounts
     except Exception as e:
+        logging.exception(f"Error in delete_email_account_ui: {str(e)}")
         return gr.update(), f"❌ Error: {str(e)}", current_accounts
 
 def set_current_account_ui(username):
     """UI function for setting the current account"""
     try:
+        logging.info(f"Setting current account to: {username}")
         status, message = set_current_account(username)
         if status:
+            logging.info(f"Current account set successfully: {username}")
             return f"✅ {message}"
         else:
+            logging.warning(f"Failed to set current account: {message}")
             return f"❌ {message}"
     except Exception as e:
+        logging.exception(f"Error in set_current_account_ui: {str(e)}")
         return f"❌ Error: {str(e)}"
 
 def fetch_emails_ui(account_list):
     """UI function for fetching emails from the current account"""
     try:
+        logging.info("Fetching emails from current account")
         current_account = get_current_account()
         if not current_account:
-            return None, None, None, "No account selected", []
+            logging.warning("No account selected")
+            return None, None, None, "No account selected", [], []
         
+        logging.info(f"Current account: {current_account['username']}")
         emails, message = fetch_emails(current_account)
         
         if not emails:
-            return None, None, None, message, []
+            logging.warning(f"No emails found or error occurred: {message}")
+            return None, None, None, message, [], []
         
         # Format emails for UI display
-        email_list = [f"[{email['date']}] {email['subject']} (From: {email['sender']})" for email in emails]
+        email_display_list = [f"[{email['date']}] {email['subject']} (From: {email['sender']})" for email in emails]
+        logging.info(f"Successfully fetched {len(emails)} emails")
         
-        return current_account["username"], None, None, f"✅ {message}", emails
+        return current_account["username"], None, None, f"✅ {message}", email_display_list, emails
     except Exception as e:
+        logging.exception("Exception in fetch_emails_ui")
         return None, None, None, f"❌ Error: {str(e)}", []
 
 def load_email_content(emails, selected_index):
@@ -691,6 +764,7 @@ def load_email_content(emails, selected_index):
         return "", "", "", False
     
     selected_email = emails[selected_index]
+    logging.info(f"Loading email content: {selected_email['subject']}")
     return (
         selected_email["subject"],
         selected_email["sender"],
@@ -700,36 +774,44 @@ def load_email_content(emails, selected_index):
 
 async def generate_ai_response(subject, sender, body, model_name, model_id_map):
     """Generate an AI response for an email"""
-    client = CompatibleChatClientStream()
-    
-    model_id = model_id_map[model_name]
-    
-    system_prompt = """You are an advanced email customer service expert for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
+    try:
+        logging.info(f"Generating AI response for email: {subject}")
+        client = CompatibleChatClientStream()
+        
+        model_id = model_id_map[model_name]
+        logging.info(f"Using model: {model_name} ({model_id})")
+        
+        system_prompt = """You are an advanced email customer service expert for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
 
 1. Extracting product codes and quantities from customer emails
 2. Responding professionally to customer inquiries about product availability and pricing
 
 Respond to customers in a helpful, professional manner while ensuring all pricing information is accurate and clearly presented."""
-    
-    message = f"Subject: {subject}\nFrom: {sender}\n\n{body}\n\nPlease generate a professional response to this email."
-    
-    response_text = ""
-    
-    messages = [{"role": "user", "content": message}]
-    system = [{"text": system_prompt}]
-    
-    # Generate response using process_query_stream
-    async for event in client.process_query_stream(
-        model_id=model_id,
-        max_tokens=2048,
-        temperature=0.7,
-        messages=messages,
-        system=system
-    ):
-        if event["type"] == "block_delta" and "text" in event["data"]["delta"]:
-            response_text += event["data"]["delta"]["text"]
-    
-    return response_text
+        
+        message = f"Subject: {subject}\nFrom: {sender}\n\n{body}\n\nPlease generate a professional response to this email."
+        
+        response_text = ""
+        
+        messages = [{"role": "user", "content": message}]
+        system = [{"text": system_prompt}]
+        
+        logging.info("Starting AI response generation")
+        # Generate response using process_query_stream
+        async for event in client.process_query_stream(
+            model_id=model_id,
+            max_tokens=2048,
+            temperature=0.7,
+            messages=messages,
+            system=system
+        ):
+            if event["type"] == "block_delta" and "text" in event["data"]["delta"]:
+                response_text += event["data"]["delta"]["text"]
+        
+        logging.info(f"AI response generation complete ({len(response_text)} chars)")
+        return response_text
+    except Exception as e:
+        logging.exception(f"Error generating AI response: {str(e)}")
+        return f"Error generating response: {str(e)}"
 
 def create_ui():
     """Create Gradio UI"""
@@ -753,7 +835,7 @@ def create_ui():
         email_accounts = gr.State([])
         email_list = gr.State([])
         
-        gr.Markdown("# 💬 Email Customer Service Assistant")
+        gr.Markdown("# 💬 Email Customer Service Agent")
         
         with gr.Row():
             # 左侧面板 - 邮箱管理和邮件显示
@@ -770,10 +852,6 @@ def create_ui():
                     with gr.Row():
                         imap_server = gr.Textbox(label="IMAP Server", placeholder="imap.gmail.com", value="imap.gmail.com")
                         imap_port = gr.Number(label="IMAP Port", value=993, precision=0)
-                    
-                    # with gr.Row():
-                    #     smtp_server = gr.Textbox(label="SMTP Server", placeholder="smtp.gmail.com", value="smtp.gmail.com")
-                    #     smtp_port = gr.Number(label="SMTP Port", value=587, precision=0)
                     
                     with gr.Row():
                         use_ssl = gr.Checkbox(label="Use SSL", value=True)
@@ -922,13 +1000,13 @@ Respond to customers in a helpful, professional manner while ensuring all pricin
         fetch_emails_btn.click(
             fetch_emails_ui,
             inputs=[email_accounts],
-            outputs=[email_username, email_subject, email_body, fetch_status, email_select]
+            outputs=[email_username, email_subject, email_body, fetch_status, email_select, email_list]
         )
         
         refresh_btn.click(
             fetch_emails_ui,
             inputs=[email_accounts],
-            outputs=[email_username, email_subject, email_body, fetch_status, email_select]
+            outputs=[email_username, email_subject, email_body, fetch_status, email_select, email_list]
         )
         
         # 选择邮件事件
