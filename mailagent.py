@@ -184,7 +184,12 @@ if not 'mcp_servers' in st.session_state:
         st.session_state.mcp_servers[x['server_name']] = x['server_id']
 
 if "system_prompt" not in st.session_state:
-    st.session_state.system_prompt = "You are an email customer service assistant for customer inquiries."
+    st.session_state.system_prompt = """You are an advanced email customer service export for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
+
+1. Extracting product codes and quantities from customer emails
+2. Responding professionally to customer inquiries about product availability and pricing
+
+Respond to customers in a helpful, professional manner while ensuring all pricing information is accurate and clearly presented."""
 
 if "messages" not in st.session_state:
     st.session_state.messages = []

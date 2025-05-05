@@ -128,7 +128,7 @@ class MCPClient:
             logger.info(f"Using command: {command} with args: {server_script_args}")
 
         env = get_default_environment()
-        if self.env['AWS_ACCESS_KEY_ID'] and self.env['AWS_ACCESS_KEY_ID']:
+        if self.env['AWS_ACCESS_KEY_ID'] and self.env['AWS_SECRET_ACCESS_KEY']:
             env['AWS_ACCESS_KEY_ID'] =  self.env['AWS_ACCESS_KEY_ID']
             env['AWS_SECRET_ACCESS_KEY'] = self.env['AWS_SECRET_ACCESS_KEY']
             env['AWS_REGION'] = self.env['AWS_REGION']
