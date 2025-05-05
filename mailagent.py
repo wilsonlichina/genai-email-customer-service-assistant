@@ -9,82 +9,100 @@ import time
 import html
 import logging
 import requests
-import streamlit as st
+import gradio as gr
 import base64
 import uuid
 from io import BytesIO
-from streamlit_local_storage import LocalStorage
 import copy
 from dotenv import load_dotenv
-load_dotenv() # load env vars from .env
+load_dotenv()  # load env vars from .env
 API_KEY = os.environ.get("API_KEY")
 
 logging.basicConfig(level=logging.INFO)
 mcp_base_url = os.environ.get('MCP_BASE_URL')
-mcp_command_list = ["uvx", "npx", "node", "python","docker","uv"]
+mcp_command_list = ["uvx", "npx", "node", "python", "docker", "uv"]
 COOKIE_NAME = "mcp_chat_user_id"
-local_storage = LocalStorage()
-# 用户会话管理
-def initialize_user_session():
-    """初始化用户会话，确保每个用户有唯一标识符"""    
-    # 尝试从cookie中获取用户ID
-    if "user_id" not in st.session_state:
-        if local_storage and local_storage.getItem(COOKIE_NAME):
-            st.session_state.user_id = local_storage.getItem(COOKIE_NAME)
-            logging.info(f"读取用户ID: {st.session_state.user_id}")
-            return
-        else:
-            # 生成新的用户ID
-            st.session_state.user_id = str(uuid.uuid4())[:8]
-            # 保存到LocalStorage
-            local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
-    
-# 生成随机用户ID的函数
-def generate_random_user_id():
-    st.session_state.user_id = str(uuid.uuid4())[:8]
-    # 更新cookie
-    local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
-    logging.info(f"生成新的随机用户ID: {st.session_state.user_id}")
-    
-# 当用户手动更改ID时保存到cookie
-def save_user_id():
-    st.session_state.user_id = st.session_state.user_id_input
-    local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
-    logging.info(f"保存用户ID: {st.session_state.user_id}")
 
-initialize_user_session()
+# 用户会话管理
+def get_user_id(request: gr.Request = None):
+    """获取或生成用户ID"""
+    user_id = None
+    if request:
+        cookies = request.cookies
+        user_id = cookies.get(COOKIE_NAME)
     
-def get_auth_headers():
+    if not user_id:
+        user_id = str(uuid.uuid4())[:8]
+    
+    return user_id
+
+def get_auth_headers(user_id):
     """构建包含用户身份的认证头"""
     headers = {
         'Authorization': f'Bearer {API_KEY}',
-        'X-User-ID': st.session_state.user_id  # 添加用户ID头
+        'X-User-ID': user_id
     }
     return headers
 
-def request_list_models():
+def request_list_models(user_id):
     url = mcp_base_url.rstrip('/') + '/v1/list/models'
     models = []
     try:
-        response = requests.get(url, headers=get_auth_headers())
+        logging.info(f'Requesting models list for user: {user_id}')
+        headers = get_auth_headers(user_id)
+        logging.info(f'Request headers: {headers}')
+        logging.info(f'Request URL: {url}')
+        
+        # Add timeout to prevent hanging
+        response = requests.get(url, headers=headers, timeout=10)
+        logging.info(f'Response status code: {response.status_code}')
+        
+        if response.status_code != 200:
+            logging.error(f'Error response: {response.text}')
+            # If we can't get models from the API, use fallback models
+            return [
+                {"model_id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "model_name": "Claude 3.5 Sonnet v2"},
+                {"model_id": "us.amazon.nova-pro-v1:0", "model_name": "Amazon Nova Pro v1"}
+            ]
+            
         data = response.json()
         models = data.get('models', [])
+        logging.info(f'Retrieved models: {models}')
+        
+        # If no models returned, use fallback models
+        if not models:
+            logging.warning("No models returned from API, using fallback models")
+            return [
+                {"model_id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "model_name": "Claude 3.5 Sonnet v2"},
+                {"model_id": "us.amazon.nova-pro-v1:0", "model_name": "Amazon Nova Pro v1"}
+            ]
+            
     except Exception as e:
-        logging.error('request list models error: %s' % e)
+        logging.error(f'Request list models error: {str(e)}')
+        import traceback
+        logging.error(traceback.format_exc())
+        
+        # Return fallback models in case of any exception
+        logging.warning("Using fallback models due to exception")
+        return [
+            {"model_id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "model_name": "Claude 3.5 Sonnet v2"},
+            {"model_id": "us.amazon.nova-pro-v1:0", "model_name": "Amazon Nova Pro v1"}
+        ]
+        
     return models
 
-def request_list_mcp_servers():
+def request_list_mcp_servers(user_id):
     url = mcp_base_url.rstrip('/') + '/v1/list/mcp_server'
     mcp_servers = []
     try:
-        response = requests.get(url, headers=get_auth_headers())
+        response = requests.get(url, headers=get_auth_headers(user_id))
         data = response.json()
         mcp_servers = data.get('servers', [])
     except Exception as e:
         logging.error('request list mcp servers error: %s' % e)
     return mcp_servers
 
-def request_add_mcp_server(server_id, server_name, command, args=[], env=None, config_json={}):
+def request_add_mcp_server(user_id, server_id, server_name, command, args=[], env=None, config_json={}):
     url = mcp_base_url.rstrip('/') + '/v1/add/mcp_server'
     status = False
     try:
@@ -97,7 +115,7 @@ def request_add_mcp_server(server_id, server_name, command, args=[], env=None, c
         }
         if env:
             payload["env"] = env
-        response = requests.post(url, json=payload, headers=get_auth_headers())
+        response = requests.post(url, json=payload, headers=get_auth_headers(user_id))
         data = response.json()
         status = data['errno'] == 0
         msg = data['msg']
@@ -132,7 +150,7 @@ def process_stream_response(response):
                 except Exception as e:
                     logging.error(f"Error processing stream: {e}")
 
-def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=1024, temperature=0.6, extra_params={}):
+def request_chat(user_id, messages, model_id, mcp_server_ids, stream=True, max_tokens=1024, temperature=0.6, extra_params={}):
     url = mcp_base_url.rstrip('/') + '/v1/chat/completions'
     msg, msg_extras = 'something is wrong!', {}
     try:
@@ -145,11 +163,11 @@ def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=10
             'temperature': temperature,
             'max_tokens': max_tokens
         }
-        logging.info(f'用户 {st.session_state.user_id} 请求payload: %s' % payload)
+        logging.info(f'用户 {user_id} 请求payload: %s' % payload)
         
         if stream:
             # 流式请求
-            headers = get_auth_headers()
+            headers = get_auth_headers(user_id)
             headers['Accept'] = 'text/event-stream'  
             response = requests.post(url, json=payload, stream=True, headers=headers)
             
@@ -157,86 +175,28 @@ def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=10
                 return response, {}
             else:
                 msg = 'An error occurred when calling the Converse operation: The system encountered an unexpected error during processing. Try your request again.'
-                logging.error(f'用户 {st.session_state.user_id} 请求聊天错误: %d' % response.status_code)
+                logging.error(f'用户 {user_id} 请求聊天错误: %d' % response.status_code)
         else:
             # 常规请求
-            response = requests.post(url, json=payload, headers=get_auth_headers())
+            response = requests.post(url, json=payload, headers=get_auth_headers(user_id))
             data = response.json()
             msg = data['choices'][0]['message']['content']
             msg_extras = data['choices'][0]['message_extras']
 
     except Exception as e:
         msg = 'An error occurred when calling the Converse operation: The system encountered an unexpected error during processing. Try your request again.'
-        logging.error(f'用户 {st.session_state.user_id} 请求聊天错误: %s' % e)
+        logging.error(f'用户 {user_id} 请求聊天错误: %s' % e)
     
-    logging.info(f'用户 {st.session_state.user_id} 响应消息: %s' % msg)
+    logging.info(f'用户 {user_id} 响应消息: %s' % msg)
     return msg, msg_extras
 
-# 初始化会话状态
-if not 'model_names' in st.session_state:
-    st.session_state.model_names = {}
-    for x in request_list_models():
-        st.session_state.model_names[x['model_name']] = x['model_id']
-
-if not 'mcp_servers' in st.session_state:
-    st.session_state.mcp_servers = {}
-    for x in request_list_mcp_servers():
-        st.session_state.mcp_servers[x['server_name']] = x['server_id']
-
-if "system_prompt" not in st.session_state:
-    st.session_state.system_prompt = """You are an advanced email customer service export for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
-
-1. Extracting product codes and quantities from customer emails
-2. Responding professionally to customer inquiries about product availability and pricing
-
-Respond to customers in a helpful, professional manner while ensuring all pricing information is accurate and clearly presented."""
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    
-# 消息列表始终保持与当前system_prompt同步
-if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
-    st.session_state.messages.insert(0, {"role": "system", "content": st.session_state.system_prompt})
-else:
-    st.session_state.messages[0]["content"] = st.session_state.system_prompt 
-
-if "enable_stream" not in st.session_state:
-    st.session_state.enable_stream = True
-    
-if "enable_thinking" not in st.session_state:
-    st.session_state.enable_thinking = False
-
-
-    
-# Function to clear conversation history
-def clear_conversation():
-    st.session_state.messages = [
-        {"role": "system", "content": st.session_state.system_prompt},
-    ]
-    st.session_state.should_rerun = True
-
-# Check if we need to rerun the app
-if "should_rerun" not in st.session_state:
-    st.session_state.should_rerun = False
-if st.session_state.should_rerun:
-    st.session_state.should_rerun = False
-    st.rerun()
-
-# add new mcp UI and handle
-def add_new_mcp_server_handle():
+def add_new_mcp_server(user_id, server_name, server_id, server_cmd, server_args, server_env, server_config_json):
     status, msg = True, "The server already been added!"
-    server_name = st.session_state.new_mcp_server_name
-    server_id = st.session_state.new_mcp_server_id
-    server_cmd = st.session_state.new_mcp_server_cmd
-    server_args = st.session_state.new_mcp_server_args
-    server_env = st.session_state.new_mcp_server_env
-    server_config_json = st.session_state.new_mcp_server_json_config
     config_json = {}
+    
     if not server_name:
         status, msg = False, "The server name is empty!"
-    elif server_name in st.session_state.mcp_servers:
-        status, msg = False, "The server name exists, try another name!"
-
+    
     # 如果server_config_json配置，则已server_config_json为准
     if server_config_json:
         try:
@@ -245,8 +205,8 @@ def add_new_mcp_server_handle():
                 raise ValueError("env key must be str.")
             if "mcpServers" in config_json:
                 config_json = config_json["mcpServers"]
-            #直接使用json配置里的id
-            logging.info(f'用户 {st.session_state.user_id} 添加新MCP服务器: {config_json}')
+            # 直接使用json配置里的id
+            logging.info(f'用户 {user_id} 添加新MCP服务器: {config_json}')
             server_id = list(config_json.keys())[0]
             server_cmd = config_json[server_id]["command"]
             server_args = config_json[server_id]["args"]
@@ -256,10 +216,9 @@ def add_new_mcp_server_handle():
 
     if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', server_id):
         status, msg = False, "The server id must be a valid variable name!"
-    elif server_id in st.session_state.mcp_servers.values():
-        status, msg = False, "The server id exists, try another one!"
     elif not server_cmd or server_cmd not in mcp_command_list:
         status, msg = False, "The server command is invalid!"
+    
     if server_env:
         try:
             server_env = json.loads(server_env) if not isinstance(server_env, dict) else server_env
@@ -270,235 +229,350 @@ def add_new_mcp_server_handle():
         except Exception as e:
             server_env = {}
             status, msg = False, "The server env must be a JSON dict[str, str]."
+    
     if isinstance(server_args, str):
         server_args = [x.strip() for x in server_args.split(' ') if x.strip()]
 
-    logging.info(f'用户 {st.session_state.user_id} 添加新MCP服务器: {server_id}:{server_name}')
+    logging.info(f'用户 {user_id} 添加新MCP服务器: {server_id}:{server_name}')
     
-    with st.spinner('Add the server...'):
-        status, msg = request_add_mcp_server(server_id, server_name, server_cmd, 
-                                             args=server_args, env=server_env, config_json=config_json)
     if status:
-        st.session_state.mcp_servers[server_name] = server_id
-
-    st.session_state.new_mcp_server_fd_status = status
-    st.session_state.new_mcp_server_fd_msg = msg
-
-
-@st.dialog('MCP Server 配置')
-def add_new_mcp_server():
-    with st.form("my_form"):
-        st.write("**新增 MCP Server**")
-
-        if 'new_mcp_server_fd_status' in st.session_state:
-            if st.session_state.new_mcp_server_fd_status:
-                succ1 = st.success(st.session_state.new_mcp_server_fd_msg, icon="✅")
-                succ2 = st.success("Please **refresh** the page to display it.", icon="📒")
-                time.sleep(3)
-                succ1.empty()
-                succ2.empty()
-                st.session_state.new_mcp_server_fd_msg = ""
-                st.session_state.new_mcp_server_id = ""
-                st.session_state.new_mcp_server_name = ""
-                st.session_state.new_mcp_server_args = ""
-                st.session_state.new_mcp_server_env = ""
-                st.session_state.new_mcp_server_json_config = ""
-            else:
-                if st.session_state.new_mcp_server_fd_msg:
-                    st.error(st.session_state.new_mcp_server_fd_msg, icon="🚨")
-
-        new_mcp_server_name = st.text_input("Server Name", 
-                                            value="", placeholder="Name description of server", key="new_mcp_server_name")
-        
-        new_mcp_server_config_json = st.text_area("使用JSON配置", 
-                                    height=128,
-                                    value="", key="new_mcp_server_json_config",
-                                    placeholder="需要提供一个有效的JSON字典")
-        with st.expander(label='输入字段配置', expanded=False):
-            new_mcp_server_id = st.text_input("Server ID", 
-                                            value="", placeholder="server id", key="new_mcp_server_id")
-
-            new_mcp_server_cmd = st.selectbox("运行命令", 
-                                            mcp_command_list, key="new_mcp_server_cmd")
-            new_mcp_server_args = st.text_area("运行参数", 
-                                            value="", key="new_mcp_server_args",
-                                            placeholder="mcp-server-git --repository path/to/git/repo")
-            new_mcp_server_env = st.text_area("环境变量", 
-                                            value="", key="new_mcp_server_env",
-                                            placeholder="需要提供一个有效的JSON字典")
-
-        submitted = st.form_submit_button("添加", 
-                                          on_click=add_new_mcp_server_handle,
-                                          disabled=False)
-
-def on_system_prompt_change():
-    if st.session_state.messages[0]["role"] == "system":
-        st.session_state.messages[0]["content"] = st.session_state.system_prompt
-        
-# UI
-with st.sidebar:
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.session_state.user_id = st.text_input('User ID', key='user_id_input',value=st.session_state.user_id,on_change=save_user_id, max_chars=32)
-    with col2:
-        st.button("🔄", on_click=generate_random_user_id, help="生成随机用户ID")
-
-    llm_model_name = st.selectbox('Model List',
-                                  list(st.session_state.model_names.keys()))
-    st.session_state.max_tokens = st.number_input('Max output token',
-                                 min_value=1, max_value=64000, value=8000)
-    st.session_state.budget_tokens = st.number_input('Max thinking token',
-                                 min_value=1024, max_value=128000, value=8192,step=1024)
-    st.session_state.temperature = st.number_input('Temperature',
-                                 min_value=0.0, max_value=1.0, value=0.6, step=0.1)
-    st.session_state.only_n_most_recent_images = st.number_input('N most recent images',
-                                 min_value=0, value=1)
-    st.session_state.system_prompt = st.text_area('System',
-                                value=st.session_state.system_prompt,
-                                height=100,
-                                on_change=on_system_prompt_change,
-                                )
-    st.session_state.enable_thinking = st.toggle('Thinking', value=False)
-
-    st.session_state.enable_stream = st.toggle('Stream', value=True)
-
-
-    with st.expander(label='已有 MCP Servers', expanded=True):
-        for i, server_name in enumerate(st.session_state.mcp_servers):
-            st.checkbox(label=server_name, value=False, key=f'mcp_server_{server_name}')
-    st.button("添加 MCP Server", 
-              on_click=add_new_mcp_server)
+        status, msg = request_add_mcp_server(user_id, server_id, server_name, server_cmd, 
+                                         args=server_args, env=server_env, config_json=config_json)
     
-    with st.container():
-        st.button("🗑️ 清空上下文", on_click=clear_conversation, key="clear_button")
+    return status, msg
 
-st.title("💬 Bedrock Email customer service assistant with MCP")
-
-# Display chat messages
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
-
-# Handle user input
-if prompt := st.chat_input():
-    # 更新system message
-    st.session_state.messages[0] = {"role": "system", "content": st.session_state.system_prompt}
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.chat_message("user").write(prompt)
-
-    model_id = st.session_state.model_names[llm_model_name]
-    mcp_server_ids = []
-    for server_name in st.session_state.mcp_servers:
-        server_key = f'mcp_server_{server_name}'
-        if st.session_state.get(server_key):
-            mcp_server_ids.append(st.session_state.mcp_servers[server_name])
-
-    # Create a placeholder for the assistant's response
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        full_response = ""
-        response, msg_extras = request_chat(st.session_state.messages, model_id, 
-                        mcp_server_ids, stream=st.session_state.enable_stream,
-                        max_tokens=st.session_state.max_tokens,
-                        temperature=st.session_state.temperature, extra_params={
-                            "only_n_most_recent_images": st.session_state.only_n_most_recent_images,
-                            "budget_tokens": st.session_state.budget_tokens,
-                            "enable_thinking": st.session_state.enable_thinking
-                        }
-                    )
-        # Get streaming response
-        if st.session_state.enable_stream:
-            if isinstance(response, requests.Response):
-                # Process streaming response
-                tool_count = 1
-                content_block_idx = 0
-                thinking_content = ""  # 添加变量存储累积的thinking内容
-                thinking_expander = None  # 用于存储thinking的expander对象
-                for content in process_stream_response(response):
-                    # logging.info(f"content block idx:{content_block_idx}")
-                    content_block_idx += 1
-                    full_response += content
-                    thk_msg, res_msg, tool_msg = "", "", ""
-                    thk_regex = r"<thinking>(.*?)</thinking>"
-                    tooluse_regex = r"<tool_use>(.*?)</tool_use>"
-                    thk_m = re.search(thk_regex, full_response, re.DOTALL)
-                    if thk_m:
-                        thk_msg = thk_m.group(1)
-                        full_response = re.sub(thk_regex, "", full_response,flags=re.DOTALL)
-                        # 如果有新的thinking内容，追加到现有内容中
-                        if thk_msg != thinking_content:
-                            thinking_content = thk_msg  # 更新thinking内容
-                            # 如果expander不存在则创建，否则更新现有的
-                            if thinking_expander is None:
-                                thinking_expander = st.expander("Thinking")
-                            with thinking_expander:
-                                st.write(thinking_content)
-
-                    tool_m = re.search(tooluse_regex, full_response, re.DOTALL)
-                    if tool_m:
-                        tool_msg = tool_m.group(1)
-                        full_response = re.sub(tooluse_regex, "", full_response)
-                    if tool_msg:
-                        # with st.expander("Tool Used"):
-                        with st.container(border=True):
-                            tool_blocks = json.loads(tool_msg)
-                            for i,tool_block in enumerate(tool_blocks):
-                                if i%2 == 0:
-                                    with st.expander(f"Tool Call:{tool_count}"):
-                                        # st.json(tool_block)
-                                        st.code(json.dumps(tool_block, ensure_ascii=False, indent=2), language="json")
-                                else:
-                                    with st.expander(f"Tool Result:{tool_count}"):
-                                         # 处理图片数据
-                                        images_data = []
-                                        display_tool_block = copy.deepcopy(tool_block)  # 创建副本以修改
-                                        
-                                        # 如果有content字段，处理其中的图片
-                                        if 'content' in display_tool_block:
-                                            for j, block in enumerate(display_tool_block['content']):
-                                                if 'image' in block and 'source' in block['image'] and 'base64' in block['image']['source']:
-                                                    # 保存图片数据用于后续显示
-                                                    images_data.append(BytesIO(base64.b64decode(block['image']['source']['base64'])))
-                                                    # 替换base64字符串为提示信息
-                                                    display_tool_block['content'][j]['image']['source']['base64'] = "[BASE64 IMAGE DATA - NOT DISPLAYED]"
-                                        
-                                        # 显示处理后的JSON
-                                        st.code(json.dumps(display_tool_block, ensure_ascii=False, indent=2), language="json")
-                
-                                        # 显示图片
-                                        tool_count += 1
-                                        for image_data in images_data:
-                                            st.image(image_data)
-
-                    # Update response in real-time
-                    response_placeholder.markdown(full_response + "▌")
-                
-                # Update final response without cursor
-                response_placeholder.markdown(full_response)
-            else:
-                # Handle error case
-                response_placeholder.markdown(response)
-                full_response = response
-        else:
-            tool_msg = ""
-            if msg_extras.get('tool_use', []):
-                tool_msg = f"```\n{json.dumps(msg_extras.get('tool_use', []), indent=4,ensure_ascii=False)}\n```"
-            thk_msg, res_msg = "", ""
+def chat_function(user_id, message, history, model_name, model_id_map, mcp_servers, selected_servers, 
+                  system_prompt, max_tokens, budget_tokens, temperature, n_recent_images, enable_thinking, enable_stream):
+    """处理聊天功能"""
+    # 构建消息列表
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # 添加历史消息
+    for user_msg, bot_msg in history:
+        messages.append({"role": "user", "content": user_msg})
+        messages.append({"role": "assistant", "content": bot_msg})
+    
+    # 添加当前用户消息
+    messages.append({"role": "user", "content": message})
+    
+    # 获取选中的MCP服务器ID
+    mcp_server_ids = [mcp_servers[server]["server_id"] for server in selected_servers]
+    
+    # 获取模型ID
+    model_id = model_id_map[model_name]
+    
+    # 构建额外参数
+    extra_params = {
+        "only_n_most_recent_images": n_recent_images,
+        "budget_tokens": budget_tokens,
+        "enable_thinking": enable_thinking
+    }
+    
+    # 请求聊天
+    response, msg_extras = request_chat(
+        user_id, messages, model_id, mcp_server_ids, 
+        stream=enable_stream, max_tokens=max_tokens,
+        temperature=temperature, extra_params=extra_params
+    )
+    
+    full_response = ""
+    thinking_content = ""
+    tool_use_content = []
+    
+    # 处理流式响应
+    if enable_stream and isinstance(response, requests.Response):
+        for content in process_stream_response(response):
+            full_response += content
+            
+            # 处理thinking内容
             thk_regex = r"<thinking>(.*?)</thinking>"
-            thk_m = re.search(thk_regex, response, re.DOTALL)
+            thk_m = re.search(thk_regex, full_response, re.DOTALL)
             if thk_m:
-                thk_msg = thk_m.group(1)
+                thinking_content = thk_m.group(1)
+                full_response = re.sub(thk_regex, "", full_response, flags=re.DOTALL)
+            
+            # 处理tool_use内容
+            tooluse_regex = r"<tool_use>(.*?)</tool_use>"
+            tool_m = re.search(tooluse_regex, full_response, re.DOTALL)
+            if tool_m:
+                tool_msg = tool_m.group(1)
+                full_response = re.sub(tooluse_regex, "", full_response)
+                tool_use_content.append(tool_msg)
+            
+            # 更新UI
+            yield full_response, thinking_content, json.dumps(tool_use_content, ensure_ascii=False, indent=2)
+    else:
+        # 处理非流式响应
+        full_response = response if not isinstance(response, requests.Response) else "Error in response"
+        
+        # 处理thinking内容
+        thk_regex = r"<thinking>(.*?)</thinking>"
+        thk_m = re.search(thk_regex, full_response, re.DOTALL)
+        if thk_m:
+            thinking_content = thk_m.group(1)
+            full_response = re.sub(thk_regex, "", full_response, flags=re.DOTALL)
+        
+        # 处理tool_use内容
+        if msg_extras.get('tool_use'):
+            tool_use_content.append(json.dumps(msg_extras.get('tool_use')))
+        
+        yield full_response, thinking_content, json.dumps(tool_use_content, ensure_ascii=False, indent=2)
 
-            res_msg = re.sub(thk_regex, "", response)
-            st.write(res_msg)
+def refresh_mcp_servers(user_id):
+    """刷新MCP服务器列表"""
+    mcp_servers = {}
+    for server in request_list_mcp_servers(user_id):
+        mcp_servers[server['server_name']] = {
+            "server_id": server['server_id'],
+            "server_desc": server.get('server_desc', server['server_name'])
+        }
+    return mcp_servers, list(mcp_servers.keys())
 
-            if thk_msg:
-                with st.expander("Thinking"):
-                    st.write(thk_msg)
-            if tool_msg:
-                with st.expander("Tool Used"):
-                    st.json(tool_msg)
+def refresh_models(user_id):
+    """刷新模型列表"""
+    model_names = []
+    model_id_map = {}
+    models = request_list_models(user_id)
+    logging.info(f"Retrieved models for refresh: {models}")
+    
+    # 确保models是列表类型
+    if not isinstance(models, list):
+        logging.warning(f"Models is not a list: {type(models)}")
+        models = []
+    
+    for model in models:
+        if isinstance(model, dict) and 'model_name' in model and 'model_id' in model:
+            model_names.append(model['model_name'])
+            model_id_map[model['model_name']] = model['model_id']
+    
+    # 如果没有获取到模型，使用默认模型
+    if not model_names:
+        logging.warning("No models retrieved, using fallback models")
+        # 添加一些默认模型作为备用
+        fallback_models = [
+            {"model_id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "model_name": "Claude 3.5 Sonnet v2"},
+            {"model_id": "us.amazon.nova-pro-v1:0", "model_name": "Amazon Nova Pro v1"}
+        ]
+        for model in fallback_models:
+            model_names.append(model['model_name'])
+            model_id_map[model['model_name']] = model['model_id']
+    
+    return model_names, model_id_map
 
-            full_response = response 
+def add_mcp_server_ui(user_id, server_name, server_id, server_cmd, server_args, server_env, server_config_json):
+    """添加MCP服务器UI处理"""
+    status, msg = add_new_mcp_server(
+        user_id, server_name, server_id, server_cmd, 
+        server_args, server_env, server_config_json
+    )
+    
+    if status:
+        # 刷新服务器列表
+        mcp_servers, server_names = refresh_mcp_servers(user_id)
+        return gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value=""), f"✅ {msg}", mcp_servers, server_names
+    else:
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ {msg}", gr.update(), gr.update()
 
-    # Add assistant's response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+def clear_conversation():
+    """清空对话历史"""
+    return [], "", "", ""
+
+def generate_random_user_id():
+    """生成随机用户ID"""
+    return str(uuid.uuid4())[:8]
+
+def save_user_id(user_id):
+    """保存用户ID到cookie"""
+    return user_id
+
+def create_ui():
+    """创建Gradio UI"""
+    with gr.Blocks(title="💬 Customer Support Agent", css="""
+        .container { max-width: 1200px; margin: auto; }
+        .sidebar { min-width: 300px; }
+        .chat-container { flex-grow: 1; }
+        .tool-output { margin-top: 10px; }
+    """) as demo:
+        # 初始化用户ID
+        user_id = gr.State(value=str(uuid.uuid4())[:8])
+        
+        # 初始化模型和服务器列表
+        mcp_servers = gr.State({})
+        model_id_map = gr.State({})
+        
+        gr.Markdown("# 💬 Customer Support Agent")
+        
+        with gr.Row():
+            with gr.Column(scale=3, elem_classes="chat-container"):
+                chatbot = gr.Chatbot(height=600)
+                
+                with gr.Row():
+                    msg = gr.Textbox(
+                        placeholder="输入您的消息...",
+                        show_label=False,
+                        container=False,
+                        scale=9
+                    )
+                    submit_btn = gr.Button("发送", scale=1)
+                
+                with gr.Accordion("思考过程", open=False):
+                    thinking_output = gr.Textbox(label="Thinking", lines=10, interactive=False)
+                
+                with gr.Accordion("工具使用", open=False):
+                    tool_output = gr.Code(language="json", label="Tool Use", interactive=False)
+                
+                clear_btn = gr.Button("🗑️ 清空对话")
+            
+            with gr.Column(scale=1, elem_classes="sidebar"):
+                with gr.Group():
+                    with gr.Row():
+                        user_id_input = gr.Textbox(label="User ID", value=lambda: user_id.value)
+                        refresh_id_btn = gr.Button("🔄", scale=1)
+                
+                model_dropdown = gr.Dropdown(label="模型", interactive=True)
+                
+                max_tokens = gr.Slider(
+                    minimum=1, maximum=64000, value=8000, step=1000,
+                    label="最大输出token"
+                )
+                
+                budget_tokens = gr.Slider(
+                    minimum=1024, maximum=128000, value=8192, step=1024,
+                    label="最大思考token"
+                )
+                
+                temperature = gr.Slider(
+                    minimum=0.0, maximum=1.0, value=0.6, step=0.1,
+                    label="Temperature"
+                )
+                
+                n_recent_images = gr.Slider(
+                    minimum=0, maximum=10, value=1, step=1,
+                    label="最近图片数量"
+                )
+                
+                system_prompt = gr.Textbox(
+                    label="System Prompt",
+                    value="""You are an advanced email customer service expert for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
+
+1. Extracting product codes and quantities from customer emails
+2. Responding professionally to customer inquiries about product availability and pricing
+
+Respond to customers in a helpful, professional manner while ensuring all pricing information is accurate and clearly presented.""",
+                    lines=3
+                )
+                
+                with gr.Row():
+                    enable_thinking = gr.Checkbox(label="启用思考", value=False)
+                    enable_stream = gr.Checkbox(label="启用流式输出", value=True)
+                
+                with gr.Accordion("MCP 服务器", open=True):
+                    server_checkboxes = gr.CheckboxGroup(label="选择服务器")
+                    
+                    with gr.Accordion("添加新服务器", open=False):
+                        with gr.Group():
+                            new_server_name = gr.Textbox(label="服务器名称", placeholder="Name description of server")
+                            new_server_id = gr.Textbox(label="服务器ID", placeholder="server id")
+                            new_server_cmd = gr.Dropdown(label="运行命令", choices=mcp_command_list)
+                            new_server_args = gr.Textbox(label="运行参数", placeholder="mcp-server-git --repository path/to/git/repo")
+                            new_server_env = gr.Textbox(label="环境变量", placeholder="需要提供一个有效的JSON字典")
+                            new_server_config = gr.Textbox(label="JSON配置", placeholder="需要提供一个有效的JSON字典", lines=5)
+                            add_server_status = gr.Textbox(label="状态", interactive=False)
+                            add_server_btn = gr.Button("添加服务器")
+        
+        # 页面加载时初始化数据
+        def init_data(request: gr.Request):
+            current_user_id = get_user_id(request)
+            logging.info(f"Initializing data for user: {current_user_id}")
+            mcp_servers_data, server_names = refresh_mcp_servers(current_user_id)
+            model_names, model_id_map_data = refresh_models(current_user_id)
+            logging.info(f"Initialized with models: {model_names}")
+            logging.info(f"Initialized with servers: {server_names}")
+            
+            return (
+                current_user_id,
+                mcp_servers_data,
+                model_id_map_data,
+                gr.update(choices=model_names, value=model_names[0] if model_names else None),
+                gr.update(choices=server_names)
+            )
+        
+        demo.load(
+            init_data,
+            inputs=[],
+            outputs=[user_id, mcp_servers, model_id_map, model_dropdown, server_checkboxes]
+        )
+        
+        # 刷新用户ID
+        refresh_id_btn.click(
+            generate_random_user_id,
+            outputs=[user_id_input]
+        )
+        
+        # 保存用户ID
+        user_id_input.change(
+            save_user_id,
+            inputs=[user_id_input],
+            outputs=[user_id]
+        )
+        
+        # 添加MCP服务器
+        add_server_btn.click(
+            add_mcp_server_ui,
+            inputs=[
+                user_id, new_server_name, new_server_id, new_server_cmd,
+                new_server_args, new_server_env, new_server_config
+            ],
+            outputs=[
+                new_server_name, new_server_id, new_server_cmd,
+                new_server_args, new_server_env, new_server_config,
+                add_server_status, mcp_servers, server_checkboxes
+            ]
+        )
+        
+        # 清空对话
+        clear_btn.click(
+            clear_conversation,
+            outputs=[chatbot, msg, thinking_output, tool_output]
+        )
+        
+        # 处理聊天
+        chat_event = msg.submit(
+            chat_function,
+            inputs=[
+                user_id, msg, chatbot, model_dropdown, model_id_map, 
+                mcp_servers, server_checkboxes, system_prompt, max_tokens,
+                budget_tokens, temperature, n_recent_images, 
+                enable_thinking, enable_stream
+            ],
+            outputs=[thinking_output, tool_output],
+            queue=True
+        ).then(
+            lambda x, y, z: ((y, x), ""),
+            inputs=[msg, chatbot, thinking_output],
+            outputs=[chatbot, msg]
+        )
+        
+        submit_btn.click(
+            chat_function,
+            inputs=[
+                user_id, msg, chatbot, model_dropdown, model_id_map, 
+                mcp_servers, server_checkboxes, system_prompt, max_tokens,
+                budget_tokens, temperature, n_recent_images, 
+                enable_thinking, enable_stream
+            ],
+            outputs=[thinking_output, tool_output],
+            queue=True
+        ).then(
+            lambda x, y, z: ((y, x), ""),
+            inputs=[msg, chatbot, thinking_output],
+            outputs=[chatbot, msg]
+        )
+        
+    return demo
+
+if __name__ == "__main__":
+    port = int(os.environ.get("CHATBOT_SERVICE_PORT", 8502))
+    demo = create_ui()
+    demo.queue()
+    demo.launch(server_name="0.0.0.0", server_port=port, share=False)

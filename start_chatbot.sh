@@ -5,7 +5,10 @@ mkdir -p ${LOG_DIR}
 
 port=${CHATBOT_SERVICE_PORT}
 export MCP_BASE_URL=http://${MCP_SERVICE_HOST}:${MCP_SERVICE_PORT}
+export MCP_CHATBOT_URL=http://${MCP_SERVICE_HOST}:${CHATBOT_SERVICE_PORT}
+
+echo "MCP_CHATBOT_URL: ${MCP_CHATBOT_URL}"
 
 lsof -t -i:$port -c streamlit| xargs kill -9 2> /dev/null
-nohup streamlit run mailagent.py \
+nohup streamlit run chatbot.py \
     --server.port ${port} > ${LOG_DIR}/start_chatbot.log 2>&1 &
