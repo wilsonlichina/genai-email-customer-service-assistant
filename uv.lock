@@ -294,6 +294,28 @@ wheels = [
 ]
 
 [[package]]
+name = "dnspython"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b5/4a/263763cb2ba3816dd94b08ad3a33d5fdae34ecb856678773cc40a3605829/dnspython-2.7.0.tar.gz", hash = "sha256:ce9c432eda0dc91cf618a5cedf1a4e142651196bbcd2c80e89ed5a907e5cfaf1", size = 345197, upload-time = "2024-10-05T20:14:59.362Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/1b/e0a87d256e40e8c888847551b20a017a6b98139178505dc7ffb96f04e954/dnspython-2.7.0-py3-none-any.whl", hash = "sha256:b4c34b7d10b51bcc3a5071e7b8dee77939f1e878477eeecc965e9835f63c6c86", size = 313632, upload-time = "2024-10-05T20:14:57.687Z" },
+]
+
+[[package]]
+name = "email-validator"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dnspython" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/ce/13508a1ec3f8bb981ae4ca79ea40384becc868bfae97fd1c942bb3a001b1/email_validator-2.2.0.tar.gz", hash = "sha256:cb690f344c617a714f22e66ae771445a1ceb46821152df8e165c5f9a364582b7", size = 48967, upload-time = "2024-06-20T11:30:30.034Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/ee/bf0adb559ad3c786f12bcbc9296b3f5675f529199bef03e2df281fa1fadb/email_validator-2.2.0-py3-none-any.whl", hash = "sha256:561977c2d73ce3611850a06fa56b414621e0c8faa9d66f2611407d87465da631", size = 33521, upload-time = "2024-06-20T11:30:28.248Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.115.12"
 source = { registry = "https://pypi.org/simple" }
@@ -558,6 +580,15 @@ wheels = [
 ]
 
 [[package]]
+name = "imaplib2"
+version = "3.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/1a/4ccb857f4832d2836a8c996f18fa7bcad19bfdf1a375dfa12e29dbe0e44a/imaplib2-3.6.tar.gz", hash = "sha256:96cb485b31868a242cb98d5c5dc67b39b22a6359f30316de536060488e581e5b", size = 26252, upload-time = "2021-06-10T20:48:53.663Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/34/1d99fbeaca781cf9c6d6f1a30966429dcdc3bd86366e6fe25773b35d1473/imaplib2-3.6-py3-none-any.whl", hash = "sha256:8d51b9bf6b7be99ea3caf4503bb15c7299f626b8d2bb6139e6055cf2613aac6a", size = 25938, upload-time = "2021-06-10T20:51:02.173Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -718,8 +749,10 @@ dependencies = [
     { name = "aiohttp" },
     { name = "boto3" },
     { name = "botocore" },
+    { name = "email-validator" },
     { name = "fastapi" },
     { name = "gradio" },
+    { name = "imaplib2" },
     { name = "mcp" },
     { name = "openai" },
     { name = "pandas" },
@@ -737,8 +770,10 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.11.16" },
     { name = "boto3", specifier = ">=1.37.29" },
     { name = "botocore", specifier = ">=1.37.29" },
+    { name = "email-validator", specifier = ">=2.1.0" },
     { name = "fastapi", specifier = ">=0.115.6" },
     { name = "gradio", specifier = ">=5.0.0" },
+    { name = "imaplib2", specifier = ">=3.6" },
     { name = "mcp", specifier = ">=1.6.0" },
     { name = "openai", specifier = ">=1.75.0" },
     { name = "pandas", specifier = ">=2.2.3" },

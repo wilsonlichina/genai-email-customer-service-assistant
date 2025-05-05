@@ -12,16 +12,235 @@ import requests
 import gradio as gr
 import base64
 import uuid
+import imaplib
+import email
+import email.header
+import email.utils
+import asyncio
+import threading
+from datetime import datetime
 from io import BytesIO
 import copy
+from email_validator import validate_email, EmailNotValidError
 from dotenv import load_dotenv
 load_dotenv()  # load env vars from .env
 API_KEY = os.environ.get("API_KEY")
+
+# Import the process_query_stream function
+from src.compatible_chat_client_stream import CompatibleChatClientStream
 
 logging.basicConfig(level=logging.INFO)
 mcp_base_url = os.environ.get('MCP_BASE_URL')
 mcp_command_list = ["uvx", "npx", "node", "python", "docker", "uv"]
 COOKIE_NAME = "mcp_chat_user_id"
+EMAIL_ACCOUNTS_PATH = "conf/email_accounts.json"
+
+# Email account management
+def load_email_accounts():
+    """Load email accounts from the configuration file"""
+    try:
+        with open(EMAIL_ACCOUNTS_PATH, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Create default structure if file doesn't exist or is invalid
+        default_accounts = {
+            "accounts": [],
+            "current_account": None
+        }
+        save_email_accounts(default_accounts)
+        return default_accounts
+
+def save_email_accounts(accounts_data):
+    """Save email accounts to the configuration file"""
+    with open(EMAIL_ACCOUNTS_PATH, "w") as f:
+        json.dump(accounts_data, f, indent=2)
+
+def add_email_account(username, password, imap_server, imap_port, use_ssl=True):
+    """Add a new email account"""
+    accounts_data = load_email_accounts()
+    
+    # Check if account already exists
+    for account in accounts_data["accounts"]:
+        if account["username"] == username:
+            return False, f"Account {username} already exists"
+    
+    # Add the new account
+    new_account = {
+        "id": username,
+        "username": username,
+        "password": password,
+        "imap_server": imap_server,
+        "imap_port": int(imap_port),
+        "use_ssl": use_ssl
+    }
+    
+    accounts_data["accounts"].append(new_account)
+    
+    # If this is the first account, set it as the current account
+    if accounts_data["current_account"] is None:
+        accounts_data["current_account"] = username
+    
+    save_email_accounts(accounts_data)
+    return True, f"Account {username} added successfully"
+
+def delete_email_account(username):
+    """Delete an email account"""
+    accounts_data = load_email_accounts()
+    
+    # Find the account to delete
+    account_found = False
+    for i, account in enumerate(accounts_data["accounts"]):
+        if account["username"] == username:
+            accounts_data["accounts"].pop(i)
+            account_found = True
+            break
+    
+    if not account_found:
+        return False, f"Account {username} not found"
+    
+    # Update current account if needed
+    if accounts_data["current_account"] == username:
+        if accounts_data["accounts"]:
+            accounts_data["current_account"] = accounts_data["accounts"][0]["username"]
+        else:
+            accounts_data["current_account"] = None
+    
+    save_email_accounts(accounts_data)
+    return True, f"Account {username} deleted successfully"
+
+def set_current_account(username):
+    """Set an account as the current account"""
+    accounts_data = load_email_accounts()
+    
+    # Check if account exists
+    account_found = False
+    for account in accounts_data["accounts"]:
+        if account["username"] == username:
+            account_found = True
+            break
+    
+    if not account_found:
+        return False, f"Account {username} not found"
+    
+    accounts_data["current_account"] = username
+    save_email_accounts(accounts_data)
+    return True, f"Current account set to {username}"
+
+def get_current_account():
+    """Get the current account configuration"""
+    accounts_data = load_email_accounts()
+    current_account_id = accounts_data.get("current_account")
+    
+    if current_account_id is None:
+        return None
+    
+    for account in accounts_data["accounts"]:
+        if account["username"] == current_account_id:
+            return account
+    
+    return None
+
+def fetch_emails(account, max_emails=10):
+    """Fetch emails from the specified account"""
+    emails = []
+    
+    try:
+        # Connect to the IMAP server
+        if account["use_ssl"]:
+            mail = imaplib.IMAP4_SSL(account["imap_server"], account["imap_port"])
+        else:
+            mail = imaplib.IMAP4(account["imap_server"], account["imap_port"])
+        
+        # Login to the server
+        mail.login(account["username"], account["password"])
+        
+        # Select the inbox
+        status, messages = mail.select("INBOX")
+        
+        if status != "OK":
+            return [], f"Failed to select INBOX: {messages}"
+        
+        # Get the message IDs
+        status, messages = mail.search(None, "ALL")
+        
+        if status != "OK":
+            return [], f"Failed to search messages: {messages}"
+        
+        message_ids = messages[0].split()
+        
+        # Get the most recent emails
+        start_idx = max(0, len(message_ids) - max_emails)
+        recent_ids = message_ids[start_idx:]
+        recent_ids.reverse()  # Most recent first
+        
+        for msg_id in recent_ids:
+            status, msg_data = mail.fetch(msg_id, "(RFC822)")
+            
+            if status != "OK":
+                continue
+            
+            # Parse the email
+            raw_email = msg_data[0][1]
+            msg = email.message_from_bytes(raw_email)
+            
+            # Decode the subject
+            subject = ""
+            subject_header = msg.get("Subject", "")
+            if subject_header:
+                decoded_header = email.header.decode_header(subject_header)
+                subject = decoded_header[0][0]
+                if isinstance(subject, bytes):
+                    subject = subject.decode("utf-8", errors="replace")
+            
+            # Get the sender
+            sender = ""
+            from_header = msg.get("From", "")
+            if from_header:
+                sender_name, sender_addr = email.utils.parseaddr(from_header)
+                if sender_name:
+                    sender = sender_name
+                else:
+                    sender = sender_addr
+            
+            # Get the date
+            date_header = msg.get("Date", "")
+            date = email.utils.parsedate_to_datetime(date_header) if date_header else None
+            date_str = date.strftime("%Y-%m-%d %H:%M:%S") if date else "Unknown"
+            
+            # Get the email body
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type == "text/plain":
+                        try:
+                            body = part.get_payload(decode=True).decode("utf-8", errors="replace")
+                            break
+                        except Exception as e:
+                            body = f"Error decoding email: {str(e)}"
+            else:
+                try:
+                    body = msg.get_payload(decode=True).decode("utf-8", errors="replace")
+                except Exception as e:
+                    body = f"Error decoding email: {str(e)}"
+            
+            # Add the email to the list
+            emails.append({
+                "id": msg_id.decode("utf-8"),
+                "subject": subject,
+                "sender": sender,
+                "date": date_str,
+                "body": body
+            })
+        
+        # Close the connection
+        mail.close()
+        mail.logout()
+        
+        return emails, "Emails fetched successfully"
+    
+    except Exception as e:
+        return [], f"Error fetching emails: {str(e)}"
 
 # 用户会话管理
 def get_user_id(request: gr.Request = None):
@@ -385,13 +604,143 @@ def save_user_id(user_id):
     """保存用户ID到cookie"""
     return user_id
 
+# Email account management UI functions
+def add_email_account_ui(username, password, imap_server, imap_port, use_ssl, current_accounts):
+    """UI function for adding an email account"""
+    try:
+        # Validate email address
+        try:
+            validate_email(username, check_deliverability=False)
+        except EmailNotValidError:
+            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(value="IMAP Servers", choices=[]), gr.update(), f"❌ Invalid email address", current_accounts
+        
+        # Add account
+        status, message = add_email_account(
+            username, password, imap_server, imap_port, use_ssl
+        )
+        
+        if status:
+            # Refresh account list
+            accounts_data = load_email_accounts()
+            account_names = [account["username"] for account in accounts_data["accounts"]]
+            current_account = accounts_data["current_account"]
+            
+            # Clear the form
+            return (
+                gr.update(value=""), gr.update(value=""), gr.update(value=""), gr.update(value=993),
+                gr.update(value=""), gr.update(value=587), gr.update(value=True),
+                gr.update(value=current_account, choices=account_names), 
+                f"✅ {message}", 
+                account_names
+            )
+        else:
+            return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ {message}", current_accounts
+    except Exception as e:
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), f"❌ Error: {str(e)}", current_accounts
+
+def delete_email_account_ui(username, current_accounts):
+    """UI function for deleting an email account"""
+    try:
+        status, message = delete_email_account(username)
+        
+        if status:
+            # Refresh account list
+            accounts_data = load_email_accounts()
+            account_names = [account["username"] for account in accounts_data["accounts"]]
+            current_account = accounts_data["current_account"]
+            
+            return gr.update(value=current_account, choices=account_names), f"✅ {message}", account_names
+        else:
+            return gr.update(), f"❌ {message}", current_accounts
+    except Exception as e:
+        return gr.update(), f"❌ Error: {str(e)}", current_accounts
+
+def set_current_account_ui(username):
+    """UI function for setting the current account"""
+    try:
+        status, message = set_current_account(username)
+        if status:
+            return f"✅ {message}"
+        else:
+            return f"❌ {message}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+def fetch_emails_ui(account_list):
+    """UI function for fetching emails from the current account"""
+    try:
+        current_account = get_current_account()
+        if not current_account:
+            return None, None, None, "No account selected", []
+        
+        emails, message = fetch_emails(current_account)
+        
+        if not emails:
+            return None, None, None, message, []
+        
+        # Format emails for UI display
+        email_list = [f"[{email['date']}] {email['subject']} (From: {email['sender']})" for email in emails]
+        
+        return current_account["username"], None, None, f"✅ {message}", emails
+    except Exception as e:
+        return None, None, None, f"❌ Error: {str(e)}", []
+
+def load_email_content(emails, selected_index):
+    """Load the content of a selected email"""
+    if not emails or selected_index < 0 or selected_index >= len(emails):
+        return "", "", "", False
+    
+    selected_email = emails[selected_index]
+    return (
+        selected_email["subject"],
+        selected_email["sender"],
+        selected_email["body"],
+        True  # Enable the AI response button
+    )
+
+async def generate_ai_response(subject, sender, body, model_name, model_id_map):
+    """Generate an AI response for an email"""
+    client = CompatibleChatClientStream()
+    
+    model_id = model_id_map[model_name]
+    
+    system_prompt = """You are an advanced email customer service expert for LSCS, specializing in processing product inquiries and generating price quotes. Your primary functions include:
+
+1. Extracting product codes and quantities from customer emails
+2. Responding professionally to customer inquiries about product availability and pricing
+
+Respond to customers in a helpful, professional manner while ensuring all pricing information is accurate and clearly presented."""
+    
+    message = f"Subject: {subject}\nFrom: {sender}\n\n{body}\n\nPlease generate a professional response to this email."
+    
+    response_text = ""
+    
+    messages = [{"role": "user", "content": message}]
+    system = [{"text": system_prompt}]
+    
+    # Generate response using process_query_stream
+    async for event in client.process_query_stream(
+        model_id=model_id,
+        max_tokens=2048,
+        temperature=0.7,
+        messages=messages,
+        system=system
+    ):
+        if event["type"] == "block_delta" and "text" in event["data"]["delta"]:
+            response_text += event["data"]["delta"]["text"]
+    
+    return response_text
+
 def create_ui():
-    """创建Gradio UI"""
+    """Create Gradio UI"""
     with gr.Blocks(title="💬 Customer Support Agent", css="""
         .container { max-width: 1200px; margin: auto; }
         .sidebar { min-width: 300px; }
         .chat-container { flex-grow: 1; }
         .tool-output { margin-top: 10px; }
+        .email-display { margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        .email-header { font-weight: bold; margin-bottom: 10px; }
+        .email-response { margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 5px; }
     """) as demo:
         # 初始化用户ID
         user_id = gr.State(value=str(uuid.uuid4())[:8])
@@ -400,29 +749,72 @@ def create_ui():
         mcp_servers = gr.State({})
         model_id_map = gr.State({})
         
-        gr.Markdown("# 💬 Customer Support Agent")
+        # 初始化邮箱和邮件列表
+        email_accounts = gr.State([])
+        email_list = gr.State([])
+        
+        gr.Markdown("# 💬 Email Customer Service Assistant")
         
         with gr.Row():
-            with gr.Column(scale=3, elem_classes="chat-container"):
-                chatbot = gr.Chatbot(height=600)
+            # 左侧面板 - 邮箱管理和邮件显示
+            with gr.Column(scale=3):
+                # 邮箱账户管理部分
+                with gr.Group():
+                    gr.Markdown("## Email Account Management")
+                    
+                    # 添加邮箱表单
+                    with gr.Row():
+                        email_username = gr.Textbox(label="Email", placeholder="example@gmail.com")
+                        email_password = gr.Textbox(label="Password", placeholder="your-app-password", type="password")
+                    
+                    with gr.Row():
+                        imap_server = gr.Textbox(label="IMAP Server", placeholder="imap.gmail.com", value="imap.gmail.com")
+                        imap_port = gr.Number(label="IMAP Port", value=993, precision=0)
+                    
+                    # with gr.Row():
+                    #     smtp_server = gr.Textbox(label="SMTP Server", placeholder="smtp.gmail.com", value="smtp.gmail.com")
+                    #     smtp_port = gr.Number(label="SMTP Port", value=587, precision=0)
+                    
+                    with gr.Row():
+                        use_ssl = gr.Checkbox(label="Use SSL", value=True)
+                    
+                    with gr.Row():
+                        add_account_btn = gr.Button("Add Account", variant="primary")
+                        delete_account_btn = gr.Button("Delete Account", variant="stop")
+                    
+                    account_status = gr.Textbox(label="Status", interactive=False)
                 
-                with gr.Row():
-                    msg = gr.Textbox(
-                        placeholder="输入您的消息...",
-                        show_label=False,
-                        container=False,
-                        scale=9
-                    )
-                    submit_btn = gr.Button("发送", scale=1)
+                # 邮箱切换
+                with gr.Group():
+                    with gr.Row():
+                        account_dropdown = gr.Dropdown(label="Email Accounts", choices=[], interactive=True)
+                        set_current_btn = gr.Button("Set Current", variant="secondary")
+                    
+                    account_change_status = gr.Textbox(label="Status", interactive=False)
                 
-                with gr.Accordion("思考过程", open=False):
-                    thinking_output = gr.Textbox(label="Thinking", lines=10, interactive=False)
+                # 邮件接收部分
+                with gr.Group():
+                    with gr.Row():
+                        fetch_emails_btn = gr.Button("Fetch Emails", variant="primary")
+                        refresh_btn = gr.Button("🔄", scale=1)
+                    
+                    fetch_status = gr.Textbox(label="Status", interactive=False)
+                    
+                    email_select = gr.Radio(label="Received Emails", choices=[], interactive=True)
                 
-                with gr.Accordion("工具使用", open=False):
-                    tool_output = gr.Code(language="json", label="Tool Use", interactive=False)
-                
-                clear_btn = gr.Button("🗑️ 清空对话")
+                # 邮件显示和AI回复部分
+                with gr.Group():
+                    gr.Markdown("## Email Content")
+                    
+                    email_subject = gr.Textbox(label="Subject", interactive=False)
+                    email_sender = gr.Textbox(label="From", interactive=False)
+                    email_body = gr.Textbox(label="Body", lines=10, interactive=False)
+                    
+                    ai_response_btn = gr.Button("Generate AI Response", variant="primary", interactive=False)
+                    
+                    ai_response = gr.Textbox(label="AI Response", lines=10, interactive=False)
             
+            # 右侧面板 - 原有的MCP服务器管理
             with gr.Column(scale=1, elem_classes="sidebar"):
                 with gr.Group():
                     with gr.Row():
@@ -483,24 +875,74 @@ Respond to customers in a helpful, professional manner while ensuring all pricin
         # 页面加载时初始化数据
         def init_data(request: gr.Request):
             current_user_id = get_user_id(request)
-            logging.info(f"Initializing data for user: {current_user_id}")
             mcp_servers_data, server_names = refresh_mcp_servers(current_user_id)
             model_names, model_id_map_data = refresh_models(current_user_id)
-            logging.info(f"Initialized with models: {model_names}")
-            logging.info(f"Initialized with servers: {server_names}")
+            
+            # 加载已有的邮箱账户
+            accounts_data = load_email_accounts()
+            account_names = [account["username"] for account in accounts_data["accounts"]]
+            current_account = accounts_data["current_account"]
             
             return (
                 current_user_id,
                 mcp_servers_data,
                 model_id_map_data,
                 gr.update(choices=model_names, value=model_names[0] if model_names else None),
-                gr.update(choices=server_names)
+                gr.update(choices=server_names),
+                gr.update(choices=account_names, value=current_account),
+                account_names
             )
         
         demo.load(
             init_data,
             inputs=[],
-            outputs=[user_id, mcp_servers, model_id_map, model_dropdown, server_checkboxes]
+            outputs=[user_id, mcp_servers, model_id_map, model_dropdown, server_checkboxes, account_dropdown, email_accounts]
+        )
+        
+        # 邮箱账户管理事件
+        add_account_btn.click(
+            add_email_account_ui,
+            inputs=[email_username, email_password, imap_server, imap_port, use_ssl, email_accounts],
+            outputs=[email_username, email_password, imap_server, imap_port, use_ssl, account_dropdown, account_status, email_accounts]
+        )
+        
+        delete_account_btn.click(
+            delete_email_account_ui,
+            inputs=[account_dropdown, email_accounts],
+            outputs=[account_dropdown, account_status, email_accounts]
+        )
+        
+        set_current_btn.click(
+            set_current_account_ui,
+            inputs=[account_dropdown],
+            outputs=[account_change_status]
+        )
+        
+        # 邮件获取事件
+        fetch_emails_btn.click(
+            fetch_emails_ui,
+            inputs=[email_accounts],
+            outputs=[email_username, email_subject, email_body, fetch_status, email_select]
+        )
+        
+        refresh_btn.click(
+            fetch_emails_ui,
+            inputs=[email_accounts],
+            outputs=[email_username, email_subject, email_body, fetch_status, email_select]
+        )
+        
+        # 选择邮件事件
+        email_select.change(
+            load_email_content,
+            inputs=[email_list, email_select],
+            outputs=[email_subject, email_sender, email_body, ai_response_btn]
+        )
+        
+        # AI生成回复事件
+        ai_response_btn.click(
+            lambda subject, sender, body, model, model_id_map: asyncio.run(generate_ai_response(subject, sender, body, model, model_id_map)),
+            inputs=[email_subject, email_sender, email_body, model_dropdown, model_id_map],
+            outputs=[ai_response]
         )
         
         # 刷新用户ID
@@ -528,45 +970,6 @@ Respond to customers in a helpful, professional manner while ensuring all pricin
                 new_server_args, new_server_env, new_server_config,
                 add_server_status, mcp_servers, server_checkboxes
             ]
-        )
-        
-        # 清空对话
-        clear_btn.click(
-            clear_conversation,
-            outputs=[chatbot, msg, thinking_output, tool_output]
-        )
-        
-        # 处理聊天
-        chat_event = msg.submit(
-            chat_function,
-            inputs=[
-                user_id, msg, chatbot, model_dropdown, model_id_map, 
-                mcp_servers, server_checkboxes, system_prompt, max_tokens,
-                budget_tokens, temperature, n_recent_images, 
-                enable_thinking, enable_stream
-            ],
-            outputs=[thinking_output, tool_output],
-            queue=True
-        ).then(
-            lambda x, y, z: ((y, x), ""),
-            inputs=[msg, chatbot, thinking_output],
-            outputs=[chatbot, msg]
-        )
-        
-        submit_btn.click(
-            chat_function,
-            inputs=[
-                user_id, msg, chatbot, model_dropdown, model_id_map, 
-                mcp_servers, server_checkboxes, system_prompt, max_tokens,
-                budget_tokens, temperature, n_recent_images, 
-                enable_thinking, enable_stream
-            ],
-            outputs=[thinking_output, tool_output],
-            queue=True
-        ).then(
-            lambda x, y, z: ((y, x), ""),
-            inputs=[msg, chatbot, thinking_output],
-            outputs=[chatbot, msg]
         )
         
     return demo

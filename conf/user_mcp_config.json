@@ -367,5 +367,65 @@
       "description": "Local File System I/O",
       "status": 1
     }
+  },
+  "f0847c6b": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "192ea8dd": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "7870a72c": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
   }
 }
