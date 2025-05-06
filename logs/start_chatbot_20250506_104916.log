@@ -1,0 +1,32 @@
+2025-05-06 10:49:19,274 - httpx - INFO - HTTP Request: GET http://localhost:8502/gradio_api/startup-events "HTTP/1.1 200 OK"
+2025-05-06 10:49:19,293 - httpx - INFO - HTTP Request: HEAD http://localhost:8502/ "HTTP/1.1 200 OK"
+2025-05-06 10:49:19,741 - httpx - INFO - HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+2025-05-06 10:49:25,048 - root - INFO - Requesting models list for user: b4fd26ed
+2025-05-06 10:49:25,048 - root - INFO - Request headers: {'Authorization': 'Bearer 123456', 'X-User-ID': 'b4fd26ed'}
+2025-05-06 10:49:25,048 - root - INFO - Request URL: http://127.0.0.1:7002/v1/list/models
+2025-05-06 10:49:25,066 - root - INFO - Response status code: 200
+2025-05-06 10:49:25,066 - root - INFO - Retrieved models: [{'model_id': 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'model_name': 'Claude 3.7 Sonnet'}, {'model_id': 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', 'model_name': 'Claude 3.5 Sonnet v2'}, {'model_id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0', 'model_name': 'Claude 3.5 Haiku v1'}, {'model_id': 'us.amazon.nova-pro-v1:0', 'model_name': 'Amazon Nova Pro v1'}, {'model_id': 'us.amazon.nova-lite-v1:0', 'model_name': 'Amazon Nova Lite v1'}, {'model_id': 'Pro/deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-Pro'}, {'model_id': 'deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-free'}]
+2025-05-06 10:49:25,066 - root - INFO - Retrieved models for refresh: [{'model_id': 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'model_name': 'Claude 3.7 Sonnet'}, {'model_id': 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', 'model_name': 'Claude 3.5 Sonnet v2'}, {'model_id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0', 'model_name': 'Claude 3.5 Haiku v1'}, {'model_id': 'us.amazon.nova-pro-v1:0', 'model_name': 'Amazon Nova Pro v1'}, {'model_id': 'us.amazon.nova-lite-v1:0', 'model_name': 'Amazon Nova Lite v1'}, {'model_id': 'Pro/deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-Pro'}, {'model_id': 'deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-free'}]
+2025-05-06 10:49:34,788 - root - INFO - Fetching emails from current account
+2025-05-06 10:49:34,789 - root - INFO - Current account: 9497301@gmail.com
+2025-05-06 10:49:34,789 - root - INFO - Attempting to fetch emails for: 9497301@gmail.com
+2025-05-06 10:49:34,789 - root - INFO - Detected Gmail account. Using OAuth2 authentication via Gmail API.
+2025-05-06 10:49:35,056 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-05-06 10:49:35,059 - gmailfetch - INFO - Fetching 10 complete emails from INBOX...
+2025-05-06 10:49:35,591 - gmailfetch - INFO - 
+Found 2 messages.
+2025-05-06 10:49:36,265 - root - INFO - Successfully fetched 2 emails via Gmail API
+2025-05-06 10:49:36,265 - root - INFO - Successfully fetched 2 emails
+2025-05-06 10:49:42,114 - root - INFO - Loading email content: RY8601AT6
+2025-05-06 10:49:45,623 - root - INFO - Generating AI response for email: RY8601AT6
+2025-05-06 10:49:45,623 - root - ERROR - Error generating AI response: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+Traceback (most recent call last):
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/mailagent.py", line 822, in generate_ai_response
+    client = CompatibleChatClientStream()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/src/compatible_chat_client_stream.py", line 51, in __init__
+    ) if self.api_base else OpenAI(
+                            ^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/openai/_client.py", line 116, in __init__
+    raise OpenAIError(
+openai.OpenAIError: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable

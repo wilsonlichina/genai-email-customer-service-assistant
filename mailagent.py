@@ -775,37 +775,45 @@ def fetch_emails_ui(account_list):
         current_account = get_current_account()
         if not current_account:
             logging.warning("No account selected")
-            return None, None, None, "No account selected", [], []
+            return None, None, None, "No account selected", gr.update(choices=[], value=None), []
         
         logging.info(f"Current account: {current_account['username']}")
         emails, message = fetch_emails(current_account)
         
         if not emails:
             logging.warning(f"No emails found or error occurred: {message}")
-            return None, None, None, message, [], []
+            return None, None, None, message, gr.update(choices=[], value=None), []
         
         # Format emails for UI display
         email_display_list = [f"[{email['date']}] {email['subject']} (From: {email['sender']})" for email in emails]
         logging.info(f"Successfully fetched {len(emails)} emails")
         
-        return current_account["username"], None, None, f"✅ {message}", email_display_list, emails
+        # Use gr.update for the Radio component
+        return current_account["username"], None, None, f"✅ {message}", gr.update(choices=email_display_list, value=None), emails
     except Exception as e:
         logging.exception("Exception in fetch_emails_ui")
-        return None, None, None, f"❌ Error: {str(e)}", []
+        return None, None, None, f"❌ Error: {str(e)}", gr.update(choices=[], value=None), []
 
-def load_email_content(emails, selected_index):
+def load_email_content(emails, selected_email_display):
     """Load the content of a selected email"""
-    if not emails or selected_index < 0 or selected_index >= len(emails):
-        return "", "", "", False
+    if not emails or not selected_email_display:
+        return "", "", "", gr.update(interactive=False)
     
-    selected_email = emails[selected_index]
-    logging.info(f"Loading email content: {selected_email['subject']}")
-    return (
-        selected_email["subject"],
-        selected_email["sender"],
-        selected_email["body"],
-        True  # Enable the AI response button
-    )
+    # Find the email that matches the selected display string
+    for index, email in enumerate(emails):
+        email_display = f"[{email['date']}] {email['subject']} (From: {email['sender']})"
+        if email_display == selected_email_display:
+            selected_email = email
+            logging.info(f"Loading email content: {selected_email['subject']}")
+            return (
+                selected_email["subject"],
+                selected_email["sender"],
+                selected_email["body"],
+                gr.update(interactive=True)  # Enable the AI response button
+            )
+    
+    logging.warning(f"Could not find matching email for: {selected_email_display}")
+    return "", "", "", gr.update(interactive=False)
 
 async def generate_ai_response(subject, sender, body, model_name, model_id_map):
     """Generate an AI response for an email"""
@@ -876,8 +884,8 @@ def create_ui():
             # 左侧面板 - 邮箱管理和邮件显示
             with gr.Column(scale=3):
                 # 邮箱账户管理部分
-                with gr.Group():
-                    gr.Markdown("## Email Account Management")
+                with gr.Accordion("## Email Account Management", open=False):
+                    #gr.Markdown("## Email Account Management")
                     
                     # 添加邮箱表单
                     with gr.Row():
