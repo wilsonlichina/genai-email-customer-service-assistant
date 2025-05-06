@@ -23,6 +23,8 @@ from io import BytesIO
 import copy
 from email_validator import validate_email, EmailNotValidError
 from dotenv import load_dotenv
+# Import Gmail fetch functionality
+from gmailfetch.gmailfetch import get_gmail_service, get_complete_emails
 load_dotenv()  # load env vars from .env
 API_KEY = os.environ.get("API_KEY")
 
@@ -144,6 +146,10 @@ def get_current_account():
     
     return None
 
+def is_gmail_account(account):
+    """Check if an account is a Gmail account"""
+    return account["imap_server"].lower() == "imap.gmail.com"
+
 def fetch_emails(account, max_emails=10):
     """Fetch emails from the specified account"""
     emails = []
@@ -156,7 +162,37 @@ def fetch_emails(account, max_emails=10):
         logging.debug(f"IMAP port: {account['imap_port']}")
         logging.debug(f"Using SSL: {account['use_ssl']}")
         
-        # Connect to the IMAP server
+        # Check if this is a Gmail account
+        if is_gmail_account(account):
+            logging.info("Detected Gmail account. Using OAuth2 authentication via Gmail API.")
+            try:
+                # Use gmailfetch module to fetch emails from Gmail
+                gmail_emails = get_complete_emails(count=max_emails, display=False)
+                
+                if gmail_emails:
+                    logging.info(f"Successfully fetched {len(gmail_emails)} emails via Gmail API")
+                    
+                    # Convert Gmail API email format to our internal format
+                    for gmail_email in gmail_emails:
+                        emails.append({
+                            "id": gmail_email["id"],
+                            "subject": gmail_email["subject"],
+                            "sender": gmail_email["from"],
+                            "date": gmail_email["date"],
+                            "body": gmail_email["body"]
+                        })
+                    
+                    return emails, "Emails fetched successfully via Gmail API"
+                else:
+                    logging.warning("No emails fetched via Gmail API")
+                    return [], "No emails found or error occurred with Gmail API"
+                    
+            except Exception as e:
+                logging.exception(f"Error using Gmail API: {str(e)}")
+                logging.warning("Falling back to standard IMAP for Gmail")
+                # Continue with standard IMAP as fallback
+        
+        # Standard IMAP authentication for non-Gmail accounts or as fallback
         try:
             logging.info(f"Connecting to IMAP server: {account['imap_server']}:{account['imap_port']}")
             if account["use_ssl"]:
@@ -172,7 +208,6 @@ def fetch_emails(account, max_emails=10):
         # Login to the server
         try:
             logging.info(f"Attempting to login as: {account['username']}")
-            logging.info(f"Attempting to login as: {account['password']}")
             mail.login(account["username"], account["password"])
             logging.info("Login successful")
         except imaplib.IMAP4.error as e:

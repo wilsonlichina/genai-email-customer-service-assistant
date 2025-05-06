@@ -1,0 +1,35 @@
+2025-05-06 09:42:53,506 - httpx - INFO - HTTP Request: GET http://localhost:8502/gradio_api/startup-events "HTTP/1.1 200 OK"
+2025-05-06 09:42:53,518 - httpx - INFO - HTTP Request: HEAD http://localhost:8502/ "HTTP/1.1 200 OK"
+2025-05-06 09:42:54,208 - httpx - INFO - HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+2025-05-06 09:43:01,522 - root - INFO - Requesting models list for user: 85a5a015
+2025-05-06 09:43:01,522 - root - INFO - Request headers: {'Authorization': 'Bearer 123456', 'X-User-ID': '85a5a015'}
+2025-05-06 09:43:01,522 - root - INFO - Request URL: http://127.0.0.1:7002/v1/list/models
+2025-05-06 09:43:01,523 - root - INFO - Response status code: 200
+2025-05-06 09:43:01,524 - root - INFO - Retrieved models: [{'model_id': 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'model_name': 'Claude 3.7 Sonnet'}, {'model_id': 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', 'model_name': 'Claude 3.5 Sonnet v2'}, {'model_id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0', 'model_name': 'Claude 3.5 Haiku v1'}, {'model_id': 'us.amazon.nova-pro-v1:0', 'model_name': 'Amazon Nova Pro v1'}, {'model_id': 'us.amazon.nova-lite-v1:0', 'model_name': 'Amazon Nova Lite v1'}, {'model_id': 'Pro/deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-Pro'}, {'model_id': 'deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-free'}]
+2025-05-06 09:43:01,524 - root - INFO - Retrieved models for refresh: [{'model_id': 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'model_name': 'Claude 3.7 Sonnet'}, {'model_id': 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', 'model_name': 'Claude 3.5 Sonnet v2'}, {'model_id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0', 'model_name': 'Claude 3.5 Haiku v1'}, {'model_id': 'us.amazon.nova-pro-v1:0', 'model_name': 'Amazon Nova Pro v1'}, {'model_id': 'us.amazon.nova-lite-v1:0', 'model_name': 'Amazon Nova Lite v1'}, {'model_id': 'Pro/deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-Pro'}, {'model_id': 'deepseek-ai/DeepSeek-V3', 'model_name': 'DeepSeek-V3-free'}]
+2025-05-06 09:43:04,248 - root - INFO - Fetching emails from current account
+2025-05-06 09:43:04,249 - root - INFO - Current account: 9497301@gmail.com
+2025-05-06 09:43:04,249 - root - INFO - Attempting to fetch emails for: 9497301@gmail.com
+2025-05-06 09:43:04,249 - root - INFO - Detected Gmail account. Using OAuth2 authentication via Gmail API.
+2025-05-06 09:43:04,255 - googleapiclient.discovery_cache - INFO - file_cache is only supported with oauth2client<4.0.0
+2025-05-06 09:43:04,257 - gmailfetch - INFO - Fetching 10 complete emails from INBOX...
+2025-05-06 09:43:04,927 - gmailfetch - INFO - 
+Found 1 messages.
+2025-05-06 09:43:05,316 - root - INFO - Successfully fetched 1 emails via Gmail API
+2025-05-06 09:43:05,316 - root - INFO - Successfully fetched 1 emails
+Traceback (most recent call last):
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/gradio/queueing.py", line 625, in process_events
+    response = await route_utils.call_process_api(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/gradio/route_utils.py", line 322, in call_process_api
+    output = await app.get_blocks().process_api(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/gradio/blocks.py", line 2142, in process_api
+    inputs = await self.preprocess_data(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/gradio/blocks.py", line 1815, in preprocess_data
+    processed_input.append(block.preprocess(inputs_cached))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/willhwli/Documents/Project/genai-email-customer-service-assistant/.venv/lib/python3.12/site-packages/gradio/components/radio.py", line 125, in preprocess
+    raise Error(
+gradio.exceptions.Error: "Value: ['[Mon, 5 May 2025 18:44:04 +0800] Check price (From: Wilson Li <9497301@qq.com>)'] (type: <class 'list'>) is not in the list of choices: []"

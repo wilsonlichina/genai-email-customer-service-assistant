@@ -3,6 +3,7 @@ import base64
 import email
 import datetime
 import argparse
+import logging
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -10,8 +11,19 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("gmailfetch")
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+TOKEN_FILE_PATH = "gmailfetch/token.json"
+CREDENTIALS_FILE_PATH = "gmailfetch/credentials.json"
 
 def get_gmail_service():
     """Authenticate and return the Gmail service."""
@@ -19,19 +31,19 @@ def get_gmail_service():
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if os.path.exists(TOKEN_FILE_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_FILE_PATH, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
+                CREDENTIALS_FILE_PATH, SCOPES
             )
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
-        with open("token.json", "w") as token:
+        with open(TOKEN_FILE_PATH, "w") as token:
             token.write(creds.to_json())
     
     # Build and return the Gmail service
@@ -77,7 +89,7 @@ def get_email_content(service, msg_id):
         
         return email_data
     except Exception as e:
-        print(f"Error retrieving email content: {e}")
+        logger.info(f"Error retrieving email content: {e}")
         return None
 
 def get_message_text(message_part):
@@ -93,12 +105,12 @@ def list_labels(service):
     labels = results.get("labels", [])
     
     if not labels:
-        print("No labels found.")
+        logger.info("No labels found.")
         return []
     
-    print("Available labels:")
+    logger.info("Available labels:")
     for label in labels:
-        print(f"- {label['name']}")
+        logger.info(f"- {label['name']}")
     
     return labels
 
@@ -119,10 +131,10 @@ def fetch_emails(service, label_ids=['INBOX'], max_results=10, query=None):
         messages = results.get('messages', [])
         
         if not messages:
-            print(f"No messages found with the specified criteria.")
+            logger.info(f"No messages found with the specified criteria.")
             return []
         
-        print(f"\nFound {len(messages)} messages.")
+        logger.info(f"\nFound {len(messages)} messages.")
         email_list = []
         
         for i, message in enumerate(messages, 1):
@@ -132,32 +144,32 @@ def fetch_emails(service, label_ids=['INBOX'], max_results=10, query=None):
             
             # Print progress for larger fetches
             if i % 5 == 0 and max_results > 5:
-                print(f"Processed {i}/{min(len(messages), max_results)} emails...")
+                logger.info(f"Processed {i}/{min(len(messages), max_results)} emails...")
         
         return email_list
         
     except HttpError as error:
-        print(f"An error occurred: {error}")
+        logger.info(f"An error occurred: {error}")
         return []
 
 def display_email(email_data, show_body=True):
     """Display email information in a readable format."""
-    print("\n" + "=" * 80)
-    print(f"ID: {email_data['id']}")
-    print(f"From: {email_data['from']}")
-    print(f"To: {email_data['to']}")
-    print(f"Date: {email_data['date']}")
-    print(f"Subject: {email_data['subject']}")
-    print("-" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info(f"ID: {email_data['id']}")
+    logger.info(f"From: {email_data['from']}")
+    logger.info(f"To: {email_data['to']}")
+    logger.info(f"Date: {email_data['date']}")
+    logger.info(f"Subject: {email_data['subject']}")
+    logger.info("-" * 80)
     
     if show_body:
-        print("Body:")
-        print(email_data['body'] if email_data['body'] else email_data['snippet'])
+        logger.info("Body:")
+        logger.info(email_data['body'] if email_data['body'] else email_data['snippet'])
     else:
-        print("Preview:")
-        print(email_data['snippet'])
+        logger.info("Preview:")
+        logger.info(email_data['snippet'])
     
-    print("=" * 80)
+    logger.info("=" * 80)
 
 def get_complete_emails(count=5, display=False):
     """
@@ -174,7 +186,7 @@ def get_complete_emails(count=5, display=False):
         # Get authenticated Gmail service
         service = get_gmail_service()
         
-        print(f"Fetching {count} complete emails from INBOX...")
+        logger.info(f"Fetching {count} complete emails from INBOX...")
         
         # Fetch emails from INBOX
         emails = fetch_emails(
@@ -192,10 +204,10 @@ def get_complete_emails(count=5, display=False):
         return emails
     
     except HttpError as error:
-        print(f"An error occurred: {error}")
+        logger.info(f"An error occurred: {error}")
         return []
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.info(f"An unexpected error occurred: {e}")
         return []
 
 
@@ -224,12 +236,12 @@ def main():
         
         # If specific email ID provided, fetch and display just that email
         if args.id:
-            print(f"Fetching email with ID: {args.id}")
+            logger.info(f"Fetching email with ID: {args.id}")
             email_data = get_email_content(service, args.id)
             if email_data:
                 display_email(email_data, show_body=True)
             else:
-                print(f"Email with ID {args.id} not found or inaccessible.")
+                logger.info(f"Email with ID {args.id} not found or inaccessible.")
             return
         
         # Handle the complete emails request
@@ -239,7 +251,7 @@ def main():
         
         # Otherwise fetch emails based on criteria
         label_ids = [args.label]
-        print(f"Fetching up to {args.max} emails from {args.label}" + 
+        logger.info(f"Fetching up to {args.max} emails from {args.label}" + 
               (f" matching query: '{args.query}'" if args.query else ""))
         
         emails = fetch_emails(
@@ -254,9 +266,9 @@ def main():
             display_email(email_data, show_body=args.full)
             
     except HttpError as error:
-        print(f"An error occurred: {error}")
+        logger.info(f"An error occurred: {error}")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.info(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
   main()

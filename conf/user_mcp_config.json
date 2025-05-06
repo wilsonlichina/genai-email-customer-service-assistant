@@ -647,5 +647,125 @@
       "description": "Local File System I/O",
       "status": 1
     }
+  },
+  "42c05ea6": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "76dc88da": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "6dd49afe": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "ae7dc9b9": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "c732db7d": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
+  },
+  "85a5a015": {
+    "cot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "local_fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs"
+      ],
+      "env": {},
+      "description": "Local File System I/O",
+      "status": 1
+    }
   }
 }
